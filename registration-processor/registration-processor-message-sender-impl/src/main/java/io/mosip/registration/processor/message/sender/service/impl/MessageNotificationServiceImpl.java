@@ -515,9 +515,9 @@ public class MessageNotificationServiceImpl
 				|| regType.equalsIgnoreCase(RegistrationType.RES_UPDATE.name())
 				|| regType.equalsIgnoreCase(RegistrationType.LOST.name())
 				|| regType.equalsIgnoreCase("CRVS_DEATH"))) {
-			setAttributesFromIdRepo(uin, attributes, regType,lang, phoneNumber, emailId);
+			setAttributesFromIdRepo(uin, attributes, regType, lang, phoneNumber, emailId);
 		} else {
-			setAttributesFromIdJson(id, process, attributes, regType,lang, phoneNumber, emailId);
+			setAttributesFromIdJson(id, process, attributes, regType, lang, phoneNumber, emailId);
 		}
 
 		return attributes;
@@ -560,7 +560,7 @@ public class MessageNotificationServiceImpl
 			}
 
 			String jsonString = new JSONObject((Map) response.getResponse().getIdentity()).toString();
-			setAttributes(jsonString, attributes, regType,lang, phoneNumber, emailId);
+			setAttributes(jsonString, attributes, regType, lang, phoneNumber, emailId);
 
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
@@ -703,8 +703,8 @@ public class MessageNotificationServiceImpl
 				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Entry - Starting to fetch fields from packet manager");
 
 		 fieldMap = packetManagerService.getFields(id, mapperJsonValues, process, ProviderStageName.MESSAGE_SENDER);
-		}catch(ApisResourceAccessException e) {
-			regProcLogger.error(LoggerFileConstant.SESSIONID.toStr        || regType.equalsIgnoreCase("CRVS_DEATH"))) {  // Add this conditioning(), LoggerFileConstant.REGISTRATIONID.toString(),
+		} catch(ApisResourceAccessException e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					id, PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name() + e.getMessage()
 							+ ExceptionUtils.getStackTrace(e));
 		}
