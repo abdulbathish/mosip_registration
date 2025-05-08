@@ -122,6 +122,9 @@ public class MessageNotificationServiceImpl
 	@Value("${mosip.notification.language-type}")
 	private String languageType;
 
+	@Value("#{${registration.processor.notification.additional-process.category-mapping:{:}}}")
+	private Map<String,String> additionalProcessCategoryForNotification;
+
 	/** The env. */
 	@Autowired
 	private Environment env;
@@ -190,13 +193,22 @@ public class MessageNotificationServiceImpl
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 				"MessageNotificationServiceImpl::sendSmsNotification()::entry");
 		try {
-			List<String> preferredLanguages= getPreferredLanguages(id,process);
+			// Get the mapped internal process type
+			String internalProcess = utility.getInternalProcess(additionalProcessCategoryForNotification, process);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::sendSmsNotification()::Mapped process type - external=" + process + 
+					", internal=" + internalProcess);
+			
+			// Use internal process type if available
+			String effectiveProcess = !internalProcess.isEmpty() ? internalProcess : process;
+			
+			List<String> preferredLanguages= getPreferredLanguages(id, effectiveProcess);
 			String artifact="";
 			for(String lang: preferredLanguages) {
 				StringBuilder emailId = new StringBuilder();
 				StringBuilder phoneNumber = new StringBuilder();
 				Map<String, Object> attributesLang=new HashMap<>(attributes);
-				setAttributes(id, process,lang, idType, attributesLang, regType, phoneNumber, emailId);
+				setAttributes(id, effectiveProcess, lang, idType, attributesLang, regType, phoneNumber, emailId);
 				InputStream stream = templateGenerator.getTemplate(templateTypeCode, attributesLang, lang);
 				if(artifact.isBlank()) {
 				 artifact = IOUtils.toString(stream, ENCODING);
@@ -268,11 +280,20 @@ public class MessageNotificationServiceImpl
 				"MessageNotificationServiceImpl::sendEmailNotification()::Entry - templateTypeCode=" + templateTypeCode + 
 				", id=" + id + ", process=" + process + ", idType=" + idType + ", regType=" + regType);
 		try {
+			// Get the mapped internal process type
+			String internalProcess = utility.getInternalProcess(additionalProcessCategoryForNotification, process);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::sendEmailNotification()::Mapped process type - external=" + process + 
+					", internal=" + internalProcess);
+			
+			// Use internal process type if available
+			String effectiveProcess = !internalProcess.isEmpty() ? internalProcess : process;
+			
 			// Log attributes for debugging
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 					"MessageNotificationServiceImpl::sendEmailNotification()::Initial attributes: " + attributes);
 			
-			List<String> preferredLanguages = getPreferredLanguages(id, process);
+			List<String> preferredLanguages = getPreferredLanguages(id, effectiveProcess);
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 					"MessageNotificationServiceImpl::sendEmailNotification()::Preferred languages: " + preferredLanguages);
 
@@ -290,7 +311,7 @@ public class MessageNotificationServiceImpl
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 						"MessageNotificationServiceImpl::sendEmailNotification()::Before setAttributes, emailId: " + emailId);
 				
-				setAttributes(id, process, lang, idType, attributesLang, regType, phoneNumber, emailId);
+				setAttributes(id, effectiveProcess, lang, idType, attributesLang, regType, phoneNumber, emailId);
 				
 				// Log after calling setAttributes
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
@@ -513,11 +534,10 @@ public class MessageNotificationServiceImpl
 				|| regType.equalsIgnoreCase(RegistrationType.DEACTIVATED.name())
 				|| regType.equalsIgnoreCase(RegistrationType.UPDATE.name())
 				|| regType.equalsIgnoreCase(RegistrationType.RES_UPDATE.name())
-				|| regType.equalsIgnoreCase(RegistrationType.LOST.name())
-				|| regType.equalsIgnoreCase("CRVS_DEATH"))) {
-			setAttributesFromIdRepo(uin, attributes, regType, lang, phoneNumber, emailId);
+				|| regType.equalsIgnoreCase(RegistrationType.LOST.name()))) {
+			setAttributesFromIdRepo(uin, attributes, regType,lang, phoneNumber, emailId);
 		} else {
-			setAttributesFromIdJson(id, process, attributes, regType, lang, phoneNumber, emailId);
+			setAttributesFromIdJson(id, process, attributes, regType,lang, phoneNumber, emailId);
 		}
 
 		return attributes;
@@ -560,7 +580,7 @@ public class MessageNotificationServiceImpl
 			}
 
 			String jsonString = new JSONObject((Map) response.getResponse().getIdentity()).toString();
-			setAttributes(jsonString, attributes, regType, lang, phoneNumber, emailId);
+			setAttributes(jsonString, attributes, regType,lang, phoneNumber, emailId);
 
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
@@ -703,7 +723,7 @@ public class MessageNotificationServiceImpl
 				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Entry - Starting to fetch fields from packet manager");
 
 		 fieldMap = packetManagerService.getFields(id, mapperJsonValues, process, ProviderStageName.MESSAGE_SENDER);
-		} catch(ApisResourceAccessException e) {
+		}catch(ApisResourceAccessException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					id, PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name() + e.getMessage()
 							+ ExceptionUtils.getStackTrace(e));
