@@ -513,7 +513,8 @@ public class MessageNotificationServiceImpl
 				|| regType.equalsIgnoreCase(RegistrationType.DEACTIVATED.name())
 				|| regType.equalsIgnoreCase(RegistrationType.UPDATE.name())
 				|| regType.equalsIgnoreCase(RegistrationType.RES_UPDATE.name())
-				|| regType.equalsIgnoreCase(RegistrationType.LOST.name()))) {
+				|| regType.equalsIgnoreCase(RegistrationType.LOST.name())
+				|| regType.equalsIgnoreCase("CRVS_DEATH"))) {
 			setAttributesFromIdRepo(uin, attributes, regType,lang, phoneNumber, emailId);
 		} else {
 			setAttributesFromIdJson(id, process, attributes, regType,lang, phoneNumber, emailId);
@@ -703,7 +704,7 @@ public class MessageNotificationServiceImpl
 
 		 fieldMap = packetManagerService.getFields(id, mapperJsonValues, process, ProviderStageName.MESSAGE_SENDER);
 		}catch(ApisResourceAccessException e) {
-			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toStr        || regType.equalsIgnoreCase("CRVS_DEATH"))) {  // Add this conditioning(), LoggerFileConstant.REGISTRATIONID.toString(),
 					id, PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name() + e.getMessage()
 							+ ExceptionUtils.getStackTrace(e));
 		}
