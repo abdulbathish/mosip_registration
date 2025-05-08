@@ -720,29 +720,45 @@ public class MessageNotificationServiceImpl
 			for (Map.Entry e : fieldMap.entrySet()) {
 				if (e.getValue() != null) {
 					String value = e.getValue().toString();
+					regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::setAttributesFromIdJson()::Processing field - " +
+						"key=" + e.getKey() + ", value=" + value + 
+						", value type=" + e.getValue().getClass().getName());
 					if (StringUtils.isNotEmpty(value)) {
-						Object json = new JSONTokener(value).nextValue();
-						if (json instanceof org.json.JSONObject) {
-							HashMap<String, Object> hashMap = mapper.readValue(value, HashMap.class);
-							attribute.putIfAbsent(e.getKey().toString(), hashMap.get(VALUE));
-						}
-						else if (json instanceof org.json.JSONArray) {
-							org.json.JSONArray jsonArray = new org.json.JSONArray(value);
-							for (int i = 0; i < jsonArray.length(); i++) {
-								Object obj = jsonArray.get(i);
-								JsonValue jsonValue = mapper.readValue(obj.toString(), JsonValue.class);
-								if(jsonValue.getLanguage().equalsIgnoreCase(lang)) {
-									attribute.putIfAbsent(e.getKey().toString() + "_" + lang, jsonValue.getValue());
-								}
+						try {
+							Object json = new JSONTokener(value).nextValue();
+							regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+								"MessageNotificationServiceImpl::setAttributesFromIdJson()::JSON type for field " + 
+								e.getKey() + " is " + json.getClass().getName());
+							if (json instanceof org.json.JSONObject) {
+								HashMap<String, Object> hashMap = mapper.readValue(value, HashMap.class);
+								attribute.putIfAbsent(e.getKey().toString(), hashMap.get(VALUE));
 							}
-						} else
+							else if (json instanceof org.json.JSONArray) {
+								org.json.JSONArray jsonArray = new org.json.JSONArray(value);
+								for (int i = 0; i < jsonArray.length(); i++) {
+									Object obj = jsonArray.get(i);
+									JsonValue jsonValue = mapper.readValue(obj.toString(), JsonValue.class);
+									if(jsonValue.getLanguage().equalsIgnoreCase(lang)) {
+										attribute.putIfAbsent(e.getKey().toString() + "_" + lang, jsonValue.getValue());
+									}
+								}
+							} else {
+								attribute.putIfAbsent(e.getKey().toString(), value);
+							}
+						} catch (Exception ex) {
+							// If JSON parsing fails, treat as plain string
+							regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+								"MessageNotificationServiceImpl::setAttributesFromIdJson()::Non-JSON value for field " + 
+								e.getKey() + ", using as plain string");
 							attribute.putIfAbsent(e.getKey().toString(), value);
-					} else
+						}
+					} else {
 						attribute.put(e.getKey().toString(), e.getValue());
+					}
 				}
 			}
 
-			// Get email and phone after processing the fieldMap
 			JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 			String email = JsonUtil.getJSONValue(
 					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
@@ -752,24 +768,44 @@ public class MessageNotificationServiceImpl
 					MappingJsonConstants.VALUE);
 
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email mapping from JSON - " +
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Field mapping configuration - " +
 				"email path=" + JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL) + 
-				", value=" + email);
+				", email field=" + email +
+				", phone path=" + JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.PHONE) +
+				", phone field=" + phone);
 
-			String emailValue = fieldMap.get(email);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Available fields in fieldMap: " + 
+				String.join(", ", fieldMap.keySet()));
+
+			// Try multiple ways to find email
+			String emailValue = null;
+			if (fieldMap.containsKey(email)) {
+				emailValue = fieldMap.get(email);
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with exact key match");
+			} else if (fieldMap.containsKey(email.toLowerCase())) {
+				emailValue = fieldMap.get(email.toLowerCase());
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with lowercase key");
+			} else {
+				// Try to find email field case-insensitively
+				for (String key : fieldMap.keySet()) {
+					if (key.equalsIgnoreCase(email)) {
+						emailValue = fieldMap.get(key);
+						regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+							"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with case-insensitive match: " + key);
+						break;
+					}
+				}
+			}
+
 			String phoneNumberValue = fieldMap.get(phone);
 
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email field mapping - field=" + email + 
-				", raw value=" + fieldMap.get(email));
-
-			// Log the email entry if found
-			if (fieldMap.containsKey(email)) {
-				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email entry - " +
-					"key=" + email + ", value=" + fieldMap.get(email) + 
-					", value type=" + (fieldMap.get(email) != null ? fieldMap.get(email).getClass().getName() : "null"));
-			}
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Field values - " +
+				"email value=" + emailValue + 
+				", phone value=" + phoneNumberValue);
 
 			if (emailValue != null) {
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
@@ -780,6 +816,8 @@ public class MessageNotificationServiceImpl
 				phoneNumber.append(phoneNumberValue);
 			}
 		} else {
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::fieldMap is null, trying sync data");
 			attribute=setAttributesFromSync(id, process, attribute, regType, lang, phoneNumber, emailId);
 		}
 		return attribute;
