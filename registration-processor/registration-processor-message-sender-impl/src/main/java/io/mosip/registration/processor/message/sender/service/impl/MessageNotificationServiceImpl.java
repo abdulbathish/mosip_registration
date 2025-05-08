@@ -717,14 +717,34 @@ public class MessageNotificationServiceImpl
 		}
 
 		if(fieldMap!=null) {
+			JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
+			String email = JsonUtil.getJSONValue(
+					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
+					MappingJsonConstants.VALUE);
+			String phone = JsonUtil.getJSONValue(
+					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.PHONE),
+					MappingJsonConstants.VALUE);
+
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email mapping from JSON - " +
+				"email path=" + JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL) + 
+				", value=" + email);
+
+			String emailValue = fieldMap.get(email);
+			String phoneNumberValue = fieldMap.get(phone);
+
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email field mapping - field=" + email + 
+				", raw value=" + fieldMap.get(email));
+
 			for (Map.Entry e : fieldMap.entrySet()) {
-				if (e.getKey().toString().equals(email)) {
-					regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-						"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email entry - " +
-						"key=" + e.getKey() + ", value=" + e.getValue() + 
-						", value type=" + (e.getValue() != null ? e.getValue().getClass().getName() : "null"));
-				}
 				if (e.getValue() != null) {
+					if (e.getKey().toString().equals(email)) {
+						regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+							"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email entry - " +
+							"key=" + e.getKey() + ", value=" + e.getValue() + 
+							", value type=" + (e.getValue() != null ? e.getValue().getClass().getName() : "null"));
+					}
 					String value = e.getValue().toString();
 					if (StringUtils.isNotEmpty(value)) {
 						Object json = new JSONTokener(value).nextValue();
