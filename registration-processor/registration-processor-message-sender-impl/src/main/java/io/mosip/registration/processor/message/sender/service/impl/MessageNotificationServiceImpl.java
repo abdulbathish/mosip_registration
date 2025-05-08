@@ -265,34 +265,74 @@ public class MessageNotificationServiceImpl
 			throws Exception {
 		ResponseDto response = null;
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::sendEmailNotification()::entry");
+				"MessageNotificationServiceImpl::sendEmailNotification()::entry with templateTypeCode: " + templateTypeCode + ", process: " + process);
 		try {
-			List<String> preferredLanguages= getPreferredLanguages(id,process);
+			// Log attributes for debugging
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::sendEmailNotification()::Initial attributes: " + attributes);
+			
+			List<String> preferredLanguages = getPreferredLanguages(id, process);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::sendEmailNotification()::Preferred languages: " + preferredLanguages);
 
 			String artifact="";
 			String subject="";
 			for(String lang: preferredLanguages) {
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Processing language: " + lang);
+				
 				StringBuilder emailId = new StringBuilder();
 				StringBuilder phoneNumber = new StringBuilder();
 				Map<String, Object> attributesLang=new HashMap<>(attributes);
-				setAttributes(id, process,lang, idType, attributesLang, regType, phoneNumber, emailId);
+				
+				// Log before calling setAttributes
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Before setAttributes, emailId: " + emailId);
+				
+				setAttributes(id, process, lang, idType, attributesLang, regType, phoneNumber, emailId);
+				
+				// Log after calling setAttributes
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::After setAttributes, emailId: " + emailId);
+				
+				// Log template retrieval
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Getting template for code: " + templateTypeCode);
+				
 				InputStream stream = templateGenerator.getTemplate(templateTypeCode, attributesLang, lang);
-
 				artifact = IOUtils.toString(stream, ENCODING);
 
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Getting subject template for code: " + subjectCode);
+				
 				InputStream subStream = templateGenerator.getTemplate(subjectCode, attributesLang, lang);
-
 				subject=IOUtils.toString(subStream, ENCODING);
+				
+				// Log email check
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Checking emailId: " + 
+						(emailId != null ? (emailId.length() > 0 ? emailId.toString() : "empty") : "null"));
+				
 				if (emailId == null || emailId.length() == 0) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+							"MessageNotificationServiceImpl::sendEmailNotification()::Email ID not found");
 					throw new EmailIdNotFoundException(PlatformErrorMessages.RPR_EML_EMAILID_NOT_FOUND.getCode());
 				}
+				
 				String[] mailTo = { emailId.toString() };
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Sending email to: " + mailTo[0]);
 
 				response = sendEmail(mailTo, mailCc, subject, artifact, attachment);
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::sendEmailNotification()::Email send response: " + 
+						(response != null ? response.getStatus() : "null"));
 			}
 
-
-
+		} catch (EmailIdNotFoundException e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+					"MessageNotificationServiceImpl::sendEmailNotification()::EmailIdNotFoundException: " + e.getMessage());
+			throw e;
 		} catch (TemplateNotFoundException | TemplateProcessingFailureException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					id, PlatformErrorMessages.RPR_SMS_TEMPLATE_GENERATION_FAILURE.name() + e.getMessage()
@@ -304,7 +344,13 @@ public class MessageNotificationServiceImpl
 					id, PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name() + e.getMessage()
 							+ ExceptionUtils.getStackTrace(e));
 			throw new ApisResourceAccessException(PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name(), e);
+		} catch (Exception e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+					"MessageNotificationServiceImpl::sendEmailNotification()::Unexpected exception: " + e.getMessage() 
+					+ ExceptionUtils.getStackTrace(e));
+			throw e;
 		}
+		
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 				"MessageNotificationServiceImpl::sendEmailNotification()::exit");
 
@@ -593,15 +639,38 @@ public class MessageNotificationServiceImpl
 		String email = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),MappingJsonConstants.VALUE);
 		String phone = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.PHONE),MappingJsonConstants.VALUE);
 
+		// Debug log to show what email field we're looking for
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+				"MessageNotificationServiceImpl::setEmailAndPhone():: Looking for email field: " + email);
+
 		String emailValue = JsonUtil.getJSONValue(demographicIdentity, email);
 		String phoneNumberValue = JsonUtil.getJSONValue(demographicIdentity, phone);
+
+		// Debug log to show what email value was found
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+				"MessageNotificationServiceImpl::setEmailAndPhone():: Email value found: " + emailValue);
+
+		// Debug log to show the demographic identity structure
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+				"MessageNotificationServiceImpl::setEmailAndPhone():: Demographic identity keys: " + demographicIdentity.keySet());
+
 		if (emailValue != null) {
 			emailId.append(emailValue);
-		}
-		if (phoneNumberValue != null) {
-			phoneNumber.append(phoneNumberValue);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"MessageNotificationServiceImpl::setEmailAndPhone():: Email ID set to: " + emailId.toString());
+		} else {
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"MessageNotificationServiceImpl::setEmailAndPhone():: Email value is null or empty");
 		}
 
+		if (phoneNumberValue != null) {
+			phoneNumber.append(phoneNumberValue);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"MessageNotificationServiceImpl::setEmailAndPhone():: Phone number set to: " + phoneNumber.toString());
+		} else {
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"MessageNotificationServiceImpl::setEmailAndPhone():: Phone number value is null or empty");
+		}
 	}
 
 	@SuppressWarnings("unchecked")
