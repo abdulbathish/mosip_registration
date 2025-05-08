@@ -717,34 +717,8 @@ public class MessageNotificationServiceImpl
 		}
 
 		if(fieldMap!=null) {
-			JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
-			String email = JsonUtil.getJSONValue(
-					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
-					MappingJsonConstants.VALUE);
-			String phone = JsonUtil.getJSONValue(
-					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.PHONE),
-					MappingJsonConstants.VALUE);
-
-			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email mapping from JSON - " +
-				"email path=" + JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL) + 
-				", value=" + email);
-
-			String emailValue = fieldMap.get(email);
-			String phoneNumberValue = fieldMap.get(phone);
-
-			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email field mapping - field=" + email + 
-				", raw value=" + fieldMap.get(email));
-
 			for (Map.Entry e : fieldMap.entrySet()) {
 				if (e.getValue() != null) {
-					if (e.getKey().toString().equals(email)) {
-						regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-							"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email entry - " +
-							"key=" + e.getKey() + ", value=" + e.getValue() + 
-							", value type=" + (e.getValue() != null ? e.getValue().getClass().getName() : "null"));
-					}
 					String value = e.getValue().toString();
 					if (StringUtils.isNotEmpty(value)) {
 						Object json = new JSONTokener(value).nextValue();
@@ -766,8 +740,9 @@ public class MessageNotificationServiceImpl
 					} else
 						attribute.put(e.getKey().toString(), e.getValue());
 				}
-
 			}
+
+			// Get email and phone after processing the fieldMap
 			JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 			String email = JsonUtil.getJSONValue(
 					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
@@ -788,49 +763,55 @@ public class MessageNotificationServiceImpl
 				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Email field mapping - field=" + email + 
 				", raw value=" + fieldMap.get(email));
 
+			// Log the email entry if found
+			if (fieldMap.containsKey(email)) {
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email entry - " +
+					"key=" + email + ", value=" + fieldMap.get(email) + 
+					", value type=" + (fieldMap.get(email) != null ? fieldMap.get(email).getClass().getName() : "null"));
+			}
+
 			if (emailValue != null) {
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Setting email value=" + emailValue);
 				emailId.append(emailValue);
 			}
-
 			if (phoneNumberValue != null) {
 				phoneNumber.append(phoneNumberValue);
 			}
-			}
-			else {
-				attribute=setAttributesFromSync(id, process, attribute, regType, lang, phoneNumber, emailId);
-			}
-			return attribute;
+		} else {
+			attribute=setAttributesFromSync(id, process, attribute, regType, lang, phoneNumber, emailId);
 		}
+		return attribute;
+	}
 
-		private Map<String, Object> setAttributesFromSync(String id, String process, Map<String, Object> attribute,
-				String regType, String lang, StringBuilder phoneNumber, StringBuilder emailId) throws PacketDecryptionFailureException, ApisResourceAccessException, IOException, JsonParseException, JsonMappingException, io.mosip.kernel.core.exception.IOException {
-			SyncRegistrationEntity regEntity = syncRegistrationService.findByRegistrationId(id).get(0);
-			if (regEntity.getOptionalValues() != null) {
-				InputStream inputStream = new ByteArrayInputStream(regEntity.getOptionalValues());
-				InputStream decryptedInputStream = decryptor.decrypt(
-						id,
-						utility.getRefId(id, regEntity.getReferenceId()),
-						inputStream);
-				String decryptedData = IOUtils.toString(decryptedInputStream, "UTF-8");
-				RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO = (RegistrationAdditionalInfoDTO) JsonUtils
-						.jsonStringToJavaObject(RegistrationAdditionalInfoDTO.class, decryptedData);
-				JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
-		        String nameField = JsonUtil.getJSONValue(
-		                JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.NAME),
-		                MappingJsonConstants.VALUE);
-				attribute.put(nameField, registrationAdditionalInfoDTO.getName());
-				if (registrationAdditionalInfoDTO.getEmail() != null) {
-					emailId.append(registrationAdditionalInfoDTO.getEmail());
-				}
-				if (registrationAdditionalInfoDTO.getPhone() != null) {
-					phoneNumber.append(registrationAdditionalInfoDTO.getPhone());
-				}
+	private Map<String, Object> setAttributesFromSync(String id, String process, Map<String, Object> attribute,
+			String regType, String lang, StringBuilder phoneNumber, StringBuilder emailId) throws PacketDecryptionFailureException, ApisResourceAccessException, IOException, JsonParseException, JsonMappingException, io.mosip.kernel.core.exception.IOException {
+		SyncRegistrationEntity regEntity = syncRegistrationService.findByRegistrationId(id).get(0);
+		if (regEntity.getOptionalValues() != null) {
+			InputStream inputStream = new ByteArrayInputStream(regEntity.getOptionalValues());
+			InputStream decryptedInputStream = decryptor.decrypt(
+					id,
+					utility.getRefId(id, regEntity.getReferenceId()),
+					inputStream);
+			String decryptedData = IOUtils.toString(decryptedInputStream, "UTF-8");
+			RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO = (RegistrationAdditionalInfoDTO) JsonUtils
+					.jsonStringToJavaObject(RegistrationAdditionalInfoDTO.class, decryptedData);
+			JSONObject regProcessorIdentityJson = utility.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
+	        String nameField = JsonUtil.getJSONValue(
+	                JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.NAME),
+	                MappingJsonConstants.VALUE);
+			attribute.put(nameField, registrationAdditionalInfoDTO.getName());
+			if (registrationAdditionalInfoDTO.getEmail() != null) {
+				emailId.append(registrationAdditionalInfoDTO.getEmail());
 			}
-			return attribute;
-
+			if (registrationAdditionalInfoDTO.getPhone() != null) {
+				phoneNumber.append(registrationAdditionalInfoDTO.getPhone());
+			}
 		}
+		return attribute;
+
+	}
 
 	private String getVid(String uin) throws ApisResourceAccessException {
 		List<String> pathsegments = new ArrayList<>();
