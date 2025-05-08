@@ -265,7 +265,8 @@ public class MessageNotificationServiceImpl
 			throws Exception {
 		ResponseDto response = null;
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::sendEmailNotification()::entry with templateTypeCode: " + templateTypeCode + ", process: " + process);
+				"MessageNotificationServiceImpl::sendEmailNotification()::Entry - templateTypeCode=" + templateTypeCode + 
+				", id=" + id + ", process=" + process + ", idType=" + idType + ", regType=" + regType);
 		try {
 			// Log attributes for debugging
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
@@ -504,7 +505,9 @@ public class MessageNotificationServiceImpl
 			attributes.put("RID", id);
 		}
 
-
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributes()::Entry - id=" + id + ", process=" + process + 
+				", lang=" + lang + ", idType=" + idType + ", regType=" + regType);
 
 		if (idType.toString().equalsIgnoreCase(UIN) && (regType.equalsIgnoreCase(RegistrationType.ACTIVATED.name())
 				|| regType.equalsIgnoreCase(RegistrationType.DEACTIVATED.name())
@@ -695,12 +698,24 @@ public class MessageNotificationServiceImpl
 		}
 		Map<String, String> fieldMap =null;
 		try {
+		 regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Entry - Starting to fetch fields from packet manager");
+
 		 fieldMap = packetManagerService.getFields(id, mapperJsonValues, process, ProviderStageName.MESSAGE_SENDER);
 		}catch(ApisResourceAccessException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					id, PlatformErrorMessages.RPR_PGS_API_RESOURCE_NOT_AVAILABLE.name() + e.getMessage()
 							+ ExceptionUtils.getStackTrace(e));
 		}
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::fieldMap received=" + 
+				(fieldMap != null ? "non-null" : "null"));
+
+		if (fieldMap != null) {
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::fieldMap keys=" + fieldMap.keySet());
+		}
+
 		if(fieldMap!=null) {
 			for (Map.Entry e : fieldMap.entrySet()) {
 				if (e.getValue() != null) {
