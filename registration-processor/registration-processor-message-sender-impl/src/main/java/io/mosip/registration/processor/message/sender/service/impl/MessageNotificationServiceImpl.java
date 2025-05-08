@@ -311,7 +311,7 @@ public class MessageNotificationServiceImpl
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
 						"MessageNotificationServiceImpl::sendEmailNotification()::Before setAttributes, emailId: " + emailId);
 				
-				setAttributes(id, effectiveProcess, lang, idType, attributesLang, regType, phoneNumber, emailId);
+				setAttributes(id, effectiveProcess, lang, idType, attributesLang, effectiveProcess, phoneNumber, emailId);
 				
 				// Log after calling setAttributes
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
@@ -530,14 +530,23 @@ public class MessageNotificationServiceImpl
 				"MessageNotificationServiceImpl::setAttributes()::Entry - id=" + id + ", process=" + process + 
 				", lang=" + lang + ", idType=" + idType + ", regType=" + regType);
 
-		if (idType.toString().equalsIgnoreCase(UIN) && (regType.equalsIgnoreCase(RegistrationType.ACTIVATED.name())
-				|| regType.equalsIgnoreCase(RegistrationType.DEACTIVATED.name())
-				|| regType.equalsIgnoreCase(RegistrationType.UPDATE.name())
-				|| regType.equalsIgnoreCase(RegistrationType.RES_UPDATE.name())
-				|| regType.equalsIgnoreCase(RegistrationType.LOST.name()))) {
-			setAttributesFromIdRepo(uin, attributes, regType,lang, phoneNumber, emailId);
+		// Get the mapped internal process type
+		String internalProcess = utility.getInternalProcess(additionalProcessCategoryForNotification, regType);
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+				"MessageNotificationServiceImpl::setAttributes()::Mapped process type - external=" + regType + 
+				", internal=" + internalProcess);
+		
+		// Use internal process type if available, otherwise use original regType
+		String effectiveRegType = !internalProcess.isEmpty() ? internalProcess : regType;
+
+		if (idType.toString().equalsIgnoreCase(UIN) && (effectiveRegType.equalsIgnoreCase(RegistrationType.ACTIVATED.name())
+				|| effectiveRegType.equalsIgnoreCase(RegistrationType.DEACTIVATED.name())
+				|| effectiveRegType.equalsIgnoreCase(RegistrationType.UPDATE.name())
+				|| effectiveRegType.equalsIgnoreCase(RegistrationType.RES_UPDATE.name())
+				|| effectiveRegType.equalsIgnoreCase(RegistrationType.LOST.name()))) {
+			setAttributesFromIdRepo(uin, attributes, regType, lang, phoneNumber, emailId);
 		} else {
-			setAttributesFromIdJson(id, process, attributes, regType,lang, phoneNumber, emailId);
+			setAttributesFromIdJson(id, process, attributes, regType, lang, phoneNumber, emailId);
 		}
 
 		return attributes;
@@ -580,7 +589,7 @@ public class MessageNotificationServiceImpl
 			}
 
 			String jsonString = new JSONObject((Map) response.getResponse().getIdentity()).toString();
-			setAttributes(jsonString, attributes, regType,lang, phoneNumber, emailId);
+			setAttributes(jsonString, attributes, regType, lang, phoneNumber, emailId);
 
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
@@ -804,28 +813,62 @@ public class MessageNotificationServiceImpl
 			if (fieldMap.containsKey(email)) {
 				emailValue = fieldMap.get(email);
 				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with exact key match");
-			} else if (fieldMap.containsKey(email.toLowerCase())) {
-				emailValue = fieldMap.get(email.toLowerCase());
-				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with lowercase key");
-			} else {
-				// Try to find email field case-insensitively
-				for (String key : fieldMap.keySet()) {
-					if (key.equalsIgnoreCase(email)) {
-						emailValue = fieldMap.get(key);
+					"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with exact key match, value=" + emailValue);
+				
+				// Try to parse as JSON if it's a JSON string
+				if (emailValue != null && !emailValue.isBlank()) {
+					try {
+						Object json = new JSONTokener(emailValue).nextValue();
+						if (json instanceof org.json.JSONObject) {
+							HashMap<String, Object> hashMap = mapper.readValue(emailValue, HashMap.class);
+							emailValue = (String) hashMap.get(VALUE);
+						} else if (json instanceof org.json.JSONArray) {
+							org.json.JSONArray jsonArray = new org.json.JSONArray(emailValue);
+							for (int i = 0; i < jsonArray.length(); i++) {
+								Object obj = jsonArray.get(i);
+								JsonValue jsonValue = mapper.readValue(obj.toString(), JsonValue.class);
+								if (jsonValue.getLanguage().equalsIgnoreCase(lang)) {
+									emailValue = jsonValue.getValue();
+									break;
+								}
+							}
+						}
+					} catch (Exception ex) {
+						// If JSON parsing fails, use value as is
 						regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-							"MessageNotificationServiceImpl::setAttributesFromIdJson()::Found email with case-insensitive match: " + key);
-						break;
+							"MessageNotificationServiceImpl::setAttributesFromIdJson()::Using email as plain string: " + emailValue);
 					}
 				}
 			}
 
 			String phoneNumberValue = fieldMap.get(phone);
+			// Try to parse phone as JSON if it's a JSON string
+			if (phoneNumberValue != null && !phoneNumberValue.isBlank()) {
+				try {
+					Object json = new JSONTokener(phoneNumberValue).nextValue();
+					if (json instanceof org.json.JSONObject) {
+						HashMap<String, Object> hashMap = mapper.readValue(phoneNumberValue, HashMap.class);
+						phoneNumberValue = (String) hashMap.get(VALUE);
+					} else if (json instanceof org.json.JSONArray) {
+						org.json.JSONArray jsonArray = new org.json.JSONArray(phoneNumberValue);
+						for (int i = 0; i < jsonArray.length(); i++) {
+							Object obj = jsonArray.get(i);
+							JsonValue jsonValue = mapper.readValue(obj.toString(), JsonValue.class);
+							if (jsonValue.getLanguage().equalsIgnoreCase(lang)) {
+								phoneNumberValue = jsonValue.getValue();
+								break;
+							}
+						}
+					}
+				} catch (Exception ex) {
+					// If JSON parsing fails, use value as is
+					regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
+						"MessageNotificationServiceImpl::setAttributesFromIdJson()::Using phone as plain string: " + phoneNumberValue);
+				}
+			}
 
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), id,
-				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Field values - " +
-				"email value=" + emailValue + 
+				"MessageNotificationServiceImpl::setAttributesFromIdJson()::Field values - email value=" + emailValue + 
 				", phone value=" + phoneNumberValue);
 
 			if (emailValue != null) {
